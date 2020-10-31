@@ -1,0 +1,11 @@
+10 10
+"wcwwwwwwww"
+"wcwcwccwcw"
+"wcccwwcccw"
+"wcwwwwwcww"
+"wcwcwwcccw"
+"wcccwwcwcw"
+"wwcwwccwcw"
+"wcccccwwcw"
+"wwcwcwwccw"
+"wwwwwwwwcw"
