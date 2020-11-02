@@ -50,7 +50,6 @@ to show-patch-data
 end
 
 
-
 to setup
   reset-ticks
   clear-all-turtles
@@ -78,6 +77,7 @@ to init-turtles-at-source
     set finished false
     move-to one-of patches with [pcolor = blue]
     set visited (patch-set patch-here) pd
+    set pen-size 5
     set stack (patch-set patch-here)
     set message-buffer (patch-set)
     set communicated (patch-set)
@@ -95,7 +95,6 @@ end
 ;set mylist but-last mylist
 
 to go
-  ;path-finder
   ifelse collaboration = true [path-finder-collaboration]
   [path-finder-basic]
 
@@ -180,6 +179,7 @@ to path-finder-updated
   ask turtles with [finished = false] [
     ifelse exit-found = true
     [
+      ; 2nd phase, when there is a pioneer
       let current-patch-visited-by [visited-by] of patch-here ; set of agents who visited current patch
       ifelse member? pioneer current-patch-visited-by
       ; if current patch is visited by the pioneer turtle, trace the path of the pioneer turtle which is not visited by current turtle
@@ -230,6 +230,7 @@ to path-finder-updated
         set finished true
       ]
     ]
+    ; 1st phase
     [
       let candidates neighbors4 with [not member? self [visited] of myself and not is-wall self]
       ifelse any? candidates
@@ -285,16 +286,12 @@ to path-finder-updated
       ]
     ]
   ]
-
 end
 
 
 to-report is-wall [curr]
   ifelse [pcolor] of curr = white [ report true ] [report false ]
 end
-
-
-
 
 
 to path-finder-basic
@@ -471,7 +468,7 @@ num-turtles
 num-turtles
 1
 50
-50.0
+40.0
 1
 1
 NIL
@@ -551,8 +548,6 @@ The robots then try to find the respective nearest node common with the pioneer.
 2. Average number of steps a robot takes based on 2 stratagies
 3. Toatal steps / Total messages / Time taken to compare efficiency of smaller and larger groups
 4. Time taken (ticks) for the group to reach the exit
-
-
 
 
 
