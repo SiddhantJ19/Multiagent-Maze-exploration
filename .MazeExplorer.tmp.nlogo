@@ -4,7 +4,7 @@ globals [
   exit-found pioneer
 ]
 
-turtles-own [stack visited communicated finished message-buffer isleader ]
+turtles-own [stack visited communicated finished message-buffer isleader num-steps ]
 patches-own [parent-patch isvisited visited-by]
 
 to load-own-patch-data
@@ -82,7 +82,7 @@ to init-turtles-at-source
     set message-buffer (patch-set)
     set communicated (patch-set)
     set exit-found false
-
+    set num-steps 0
   ask patch-here [
     set parent-patch NoBody
     set isvisited true
@@ -96,15 +96,15 @@ end
 
 to go
   ;path-finder
-  ifelse data-sharing = true [path-finder-data-sharing]
-  [path-finder-updated]
+  ifelse collaboration = true [path-finder-collaboration]
+  [path-finder-basic]
 
   if [pcolor] of turtles = red [stop]
   tick
 end
 
 
-to path-finder-data-sharing
+to path-finder-collaboration
   ifelse (ticks mod 10) = 0
   [
     ; elect leader -> choose one randomly
@@ -193,6 +193,7 @@ to path-finder-updated
         [
           let parent patch-here
           move-to one-of candidates
+          set num-steps num-steps + 1
 
           ask patch-here [
             if isvisited = true [show pxcor ]
@@ -208,7 +209,10 @@ to path-finder-updated
           let parent-of-curr [parent-patch] of self
           set stack stack with [self != myself]
           ifelse parent-of-curr = NoBody [die]
-          [move-to parent-of-curr]
+          [
+            move-to parent-of-curr
+            set num-steps num-steps + 1
+          ]
         ]
 
       ]
@@ -217,9 +221,12 @@ to path-finder-updated
           let parent-of-curr [parent-patch] of self
           set stack stack with [self != myself]
           ifelse parent-of-curr = NoBody [die]
-          [move-to parent-of-curr]
+          [
+          move-to parent-of-curr
+          set num-steps num-steps + 1
+          ]
       ]
-      if pcolor = red and exit-found = fals [
+      if pcolor = red [
         set finished true
       ]
     ]
@@ -233,7 +240,7 @@ to path-finder-updated
         [
           let parent patch-here
           move-to one-of not-communicated-candidates
-
+          set num-steps num-steps + 1
           ask patch-here [
             if isvisited = true [show pxcor ]
             set isvisited true
@@ -249,7 +256,7 @@ to path-finder-updated
         [
           let parent patch-here
           move-to one-of candidates
-
+          set num-steps num-steps + 1
           ask patch-here [
             if isvisited = true [show pxcor ]
             set isvisited true
@@ -266,7 +273,10 @@ to path-finder-updated
         let parent-of-curr [parent-patch] of self
         set stack stack with [self != myself]
         ifelse parent-of-curr = NoBody [die]
-        [move-to parent-of-curr]
+        [
+          move-to parent-of-curr
+          set num-steps num-steps + 1
+        ]
       ]
       if pcolor = red and exit-found = false [
         set finished true
@@ -287,42 +297,35 @@ end
 
 
 
+to path-finder-basic
+  ask turtles with [finished = false] [
+    ; check if self (candidate which is a patch) is not visited. Since visited/history is turtle's attribute
+    let candidates neighbors4 with [not member? self [visited] of myself and not is-wall self ]
+    ifelse any? candidates
+      [
+        let parent patch-here
+        move-to one-of candidates
+        set num-steps num-steps + 1
 
-
-
-
-
-
-
-
-
-
-
-
-;to path-finder
-;  ask turtles with [finished = false] [
-;    ; check if self (candidate which is a patch) is not visited. Since visited/history is turtle's attribute
-;    let candidates neighbors4 with [not member? self [visited] of myself and not is-wall self ]
-;    ifelse any? candidates
-;      [
-;        let parent patch-here
-;        move-to one-of candidates
-;
-;        ask patch-here [set parent-patch parent]
-;        ; patch-set creates a patch-set = [ [history], patch-here ]
-;        set visited (patch-set visited patch-here)
-;        set stack (patch-set stack patch-here)
-;      ]
-;      ; if stuck ie no neighbors then backtrack
-;      [
-;       let parent-of-curr [parent-patch] of self
-;       set stack stack with [self != myself]
-;       ifelse parent-of-curr = NoBody [die]
-;       [move-to parent-of-curr]
-;      ]
-;    if pcolor = red [set finished true]
-;  ]
-;end
+        ask patch-here [set parent-patch parent]
+        ; patch-set creates a patch-set = [ [history], patch-here ]
+        set visited (patch-set visited patch-here)
+        set stack (patch-set stack patch-here)
+        set isvisited  true
+      ]
+      ; if stuck ie no neighbors then backtrack
+      [
+       let parent-of-curr [parent-patch] of self
+       set stack stack with [self != myself]
+       ifelse parent-of-curr = NoBody [die]
+       [
+        move-to parent-of-curr
+        set num-steps num-steps + 1
+      ]
+      ]
+    if pcolor = red [set finished true]
+  ]
+end
 
 
 
@@ -453,8 +456,8 @@ SWITCH
 320
 182
 353
-data-sharing
-data-sharing
+collaboration
+collaboration
 0
 1
 -1000
@@ -467,38 +470,92 @@ SLIDER
 num-turtles
 num-turtles
 1
-10
-2.0
+50
+50.0
 1
 1
 NIL
 HORIZONTAL
 
 MONITOR
-5
-394
-131
-439
+1067
+194
+1193
+239
 % maze explored
 100 * count patches with [ isvisited = true] / count patches with [pcolor = yellow]
 3
 1
 11
 
+MONITOR
+1080
+333
+1191
+378
+Avg num steps
+sum [num-steps] of turtles / count turtles
+17
+1
+11
+
+MONITOR
+1089
+283
+1177
+328
+Total Steps
+sum [num-steps] of turtles
+17
+1
+11
+
 @#$#@#$#@
 ## WHAT IS IT?
 
-This code example shows how to read in information from a file directly from NetLogo code.
+Multi Agent Maze Exploration.
 
-In this example, we use the data to make a complicated patch maze. `load-patch-data` will load in patch data from a file to a list, where `show-patch-data` will display all the data that was loaded in the view.  By default, there is only one file that is included that can be loaded in.  It is called "File IO Patch Data.txt" and it is located in the code example's directory.  You can use `load-own-patch-data` to see how one would let the user decide which file to choose.  The function `save-patch-data` is in the procedures if you wish to see how the file "File IO Patch Data.txt" was created.  For more information about file output, see File Output Example.
+In recent years, Mazes have been used to examine the artificial intelligence of robots by observing their ability to traverse mazes using algorithm for maze exploration. 
+The modelling is being done to find good stratagies to improve reliability, restrict resource usage etc.
 
-File input can be used to load in complicated information or to give the user the option to choose data.  A good example is loading in patch information (such a maze in this case), or turtle information (such as coordinates).  The difference between doing this and `import-world` is that the user can customize the way the data is imported or exported -- you can save or load only the relevant data.
+This model implements search and rescue robots as agents and the goal for the swarm is not only to find the exit but all the agents must reach the exit.
 
-## RELATED MODELS
+## Implementation
 
-File Output Example
+There are 2 modes in the modell.
+1. Independent Exploration.
+The robots search for exit on their own. There are noways of collaboration.
+The robots maintain the record of the cells they have visited and recursively finds the exit.
+2.  Collaborative exploration
+Every 10 ticks, the robots communicate. The communication is done as follows
 
-<!-- 2004 -->
+1. Leader Election - A leader is elected among the robots, (currently at random)
+2. Data-Collection - The robots send their visited record to the leader
+3. Data-Distribution - The leader then distributes the collected knowledge base to peers
+4. Data Processing - The robots recieve the message from the leader and store it    in-memory but seperate from their own visited records
+
+The communication is done every 10 ticks. Rest of the time, the turtles move based on 2 seperate knowledge-bases, one that they themselves have visited and the communicated KB.
+
+At every junction a turtle has the follwing order f preference
+
+1. Move to neighbor not visited and not communicated
+2. If all neighbors are either visited or communicated, go to the communicated neighbor
+3. If no neighbor or all neighbors visited, bactrack the path
+
+Finally, if one of the robots reaches the exit, the peers are communicated that the exit has been found and which robot (pioneer) found the exit. 
+The robots then try to find the respective nearest node common with the pioneer. Once the common node is found they trace the pioneer's path which is guaranteed to lead to the exit.
+
+## Analysis
+
+1. Difference between percentage of maze explored using 2 stratgies
+2. Average number of steps a robot takes based on 2 stratagies
+3. Toatal steps / Total messages / Time taken to compare efficiency of smaller and larger groups
+4. Time taken (ticks) for the group to reach the exit
+
+
+
+
+
 @#$#@#$#@
 default
 true
