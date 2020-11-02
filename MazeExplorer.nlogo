@@ -1,6 +1,10 @@
-globals [ patch-data dimX dimY row i j]
+globals [
+  patch-data dimX dimY row i j
+  ; following needs to be defined as turtles attributes
+  exit-found pioneer
+]
 
-turtles-own [stack visited communicated finished message-buffer isleader exit-found exit-found-by]
+turtles-own [stack visited communicated finished message-buffer isleader ]
 patches-own [parent-patch isvisited visited-by]
 
 to load-own-patch-data
@@ -176,14 +180,48 @@ to path-finder-updated
   ask turtles with [finished = false] [
     ifelse exit-found = true
     [
-      let current-patch-visited-by [visited-by] of patch-here
-;      ifelse member? exit-found-by current-patch-visited-by
-;      ; if current patch is visited by the pioneer turtle, trace the path of the pioneer turtle
-;      [
-;
-;      ]
-;      ; if current patch is not visited by the pioneer turtle, backtrack
-;      []
+      let current-patch-visited-by [visited-by] of patch-here ; set of agents who visited current patch
+      ifelse member? pioneer current-patch-visited-by
+      ; if current patch is visited by the pioneer turtle, trace the path of the pioneer turtle which is not visited by current turtle
+      [
+        let candidates neighbors4 with [
+          not is-wall self and
+          not member? self [visited] of myself and
+          member? self [visited] of pioneer
+        ]
+        ifelse any? candidates
+        [
+          let parent patch-here
+          move-to one-of candidates
+
+          ask patch-here [
+            if isvisited = true [show pxcor ]
+            set isvisited true
+            set visited-by (turtle-set visited-by myself)
+          ]
+
+          ask patch-here [set parent-patch parent]
+          set visited (patch-set visited patch-here)
+          set stack (patch-set stack patch-here)
+        ]
+        [
+          let parent-of-curr [parent-patch] of self
+          set stack stack with [self != myself]
+          ifelse parent-of-curr = NoBody [die]
+          [move-to parent-of-curr]
+        ]
+
+      ]
+      ; if current patch is not visited by the pioneer turtle, backtrack
+      [
+          let parent-of-curr [parent-patch] of self
+          set stack stack with [self != myself]
+          ifelse parent-of-curr = NoBody [die]
+          [move-to parent-of-curr]
+      ]
+      if pcolor = red [
+        set finished true
+      ]
     ]
     [
       let candidates neighbors4 with [not member? self [visited] of myself and not is-wall self]
@@ -196,17 +234,28 @@ to path-finder-updated
           let parent patch-here
           move-to one-of not-communicated-candidates
 
-          set isvisited true
-          set visited-by (turtle-set visited-by self)
+          ask patch-here [
+            if isvisited = true [show pxcor ]
+            set isvisited true
+            set visited-by (turtle-set visited-by myself)
+          ]
 
+          show visited-by
           ask patch-here [set parent-patch parent]
           set visited (patch-set visited patch-here)
           set stack (patch-set stack patch-here)
         ]
-        ; if candidates not visited, not a wall but communicated
+        ; if candidates not visited, not a wall but communicated so visit now
         [
           let parent patch-here
           move-to one-of candidates
+
+          ask patch-here [
+            if isvisited = true [show pxcor ]
+            set isvisited true
+            set visited-by (turtle-set visited-by myself)
+          ]
+
           ask patch-here [set parent-patch parent]
           set visited (patch-set visited patch-here)
           set stack (patch-set stack patch-here)
@@ -219,21 +268,13 @@ to path-finder-updated
         ifelse parent-of-curr = NoBody [die]
         [move-to parent-of-curr]
       ]
+      if pcolor = red and exit-found = false [
+        set finished true
+        set exit-found true
+        set pioneer self
+      ]
     ]
-    if pcolor = red [set finished true]
   ]
-
-     ;ask turtles if pcolor = red [
-      ;set finished true
-
-;      if exit-found = false [
-;        ask turtles [
-;          set exit-found true
-;          set exit-found-by myself ; the turtle who found the exit
-;        ]
-;      ]
-
-    ;]
 
 end
 
@@ -427,7 +468,7 @@ num-turtles
 num-turtles
 1
 10
-3.0
+2.0
 1
 1
 NIL
