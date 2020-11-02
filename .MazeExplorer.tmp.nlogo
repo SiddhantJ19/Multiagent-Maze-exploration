@@ -223,6 +223,8 @@ to path-finder-updated
     if pcolor = red [set finished true]
   ]
 
+  ask turtles with [pcolor = red and finis]
+
      ;ask turtles if pcolor = red [
       ;set finished true
 
