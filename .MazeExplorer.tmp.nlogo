@@ -73,7 +73,7 @@ end
 to init-patches
   ask patches [
     set isvisited false
-    set visited-by (turtle-set); initializing empty turtle set
+    set visited-by (turtle-set)
   ]
 
 end
@@ -88,15 +88,13 @@ to init-turtles-at-source
     set isleader false
     set finished false
     move-to one-of patches with [pcolor = blue]
+    set visited (patch-set) pd ; initializing empty visited
     set pen-size 5
     set stack (patch-set patch-here)
-    set visited (patch-set) pd ; initializing empty visited
     set message-buffer (patch-set) ; empty message buffer since no communication happened
     set communicated (patch-set) ; empty communicated since no communication happened
     set exit-found false
     set num-steps 0
-
-    set visited (patch-set visited patch-here) ; updating visited by adding current patch
   ask patch-here [
     set parent-patch NoBody
     set isvisited true
@@ -107,8 +105,7 @@ end
 
 
 to go
-  ifelse collaboration = true
-  [path-finder-collaboration]
+  ifelse collaboration = true [path-finder-collaboration]
   [path-finder-basic]
 
   if [pcolor] of turtles = red [stop]
