@@ -5,7 +5,6 @@ globals [
 ]
 
 turtles-own [
-  stack
   visited ; patch-set -> all patches visited by the turtle
   message-buffer ; patch-set -> every 10th tick turtles recieves set of patches communicated by other turtles
   communicated ; patch-set -> all patches which may be visited by the turtle but communicated by the peer turtles;
@@ -89,7 +88,6 @@ to init-turtles-at-source
     set finished false
     move-to one-of patches with [pcolor = blue]
     set pen-size 5
-    set stack (patch-set patch-here)
     set visited (patch-set) pd ; initializing empty visited
     set message-buffer (patch-set) ; empty message buffer since no communication happened
     set communicated (patch-set) ; empty communicated since no communication happened
@@ -115,7 +113,6 @@ to go
   tick
 end
 
-; collaborative path finding
 ; TODO:
 ; 1. Communication range, (bsaed on some real factors, for validation), slider for communication range
 ; 3. Define Battery and counsumption in walking and communication (based on real data on battery)
@@ -124,6 +121,7 @@ end
 ; 6. Optimal size of robots for a n*m size maze, Optimality based on (steps, messages, time)
 ; 4. Currenty ticks are in sync of all robots, in a distributed setting this is not true, Can we have a switch with ticks not synchronised
 
+; collaborative path finding
 to path-finder-collaboration
   ifelse (ticks mod 10) = 0 ; every ten ticks, communicate
   [
@@ -194,13 +192,13 @@ end
 
 to path-finder-updated
   ask turtles with [finished = false][
-    ifelse exit-found = true
+    ifelse exit-found = true ; if any of the turtles found the exit; then follow the pioneer's path
     [
-      ; 2nd phase, when there is a pioneer
+      ; 2nd phase, Following Pioneer's path
       let current-patch-visited-by [visited-by] of patch-here ; set of agents who visited current patch
       ifelse member? pioneer current-patch-visited-by
-      ; if current patch is visited by the pioneer turtle, trace the path of the pioneer turtle which is not visited by current turtle
       [
+        ; if current patch is visited by the pioneer turtle, trace the path of the pioneer turtle which is not visited by current turtle
         let candidates neighbors4 with [
           not is-wall self and
           not member? self [visited] of myself and
@@ -208,39 +206,15 @@ to path-finder-updated
         ]
         ifelse any? candidates
         [
-          let parent patch-here
-          move-to one-of candidates
-          set num-steps num-steps + 1
-
-          ask patch-here [
-            if isvisited = true [show pxcor ]
-            set isvisited true
-            set visited-by (turtle-set visited-by myself)
-          ]
-          ask patch-here [set parent-patch parent]
-          set visited (patch-set visited patch-here)
-          set stack (patch-set stack patch-here)
+          moveToOneOf candidates
         ]
         [
-          let parent-of-curr [parent-patch] of self
-          set stack stack with [self != myself]
-          ifelse parent-of-curr = NoBody [die]
-          [
-            move-to parent-of-curr
-            set num-steps num-steps + 1
-          ]
+          backTrackFromHere
         ]
-
       ]
       ; if current patch is not visited by the pioneer turtle, backtrack
       [
-          let parent-of-curr [parent-patch] of self
-          set stack stack with [self != myself]
-          ifelse parent-of-curr = NoBody [die]
-          [
-          move-to parent-of-curr
-          set num-steps num-steps + 1
-          ]
+        backtrackFromHere
       ]
       if pcolor = red [
         set finished true
@@ -253,47 +227,18 @@ to path-finder-updated
       [
         let not-communicated-candidates candidates with [not member? self [communicated] of myself]
         ifelse any? not-communicated-candidates
-        ; if candidates are not visited, not a wall and not communicated
+        ; if any candidate neighbor is present which is neither visited nor communicated
         [
-          let parent patch-here
-          move-to one-of not-communicated-candidates
-          set num-steps num-steps + 1
-          ask patch-here [
-            if isvisited = true [show pxcor ]
-            set isvisited true
-            set visited-by (turtle-set visited-by myself)
-          ]
-
-          show visited-by
-          ask patch-here [set parent-patch parent]
-          set visited (patch-set visited patch-here)
-          set stack (patch-set stack patch-here)
+          moveToOneOf not-communicated-candidates
         ]
-        ; if candidates not visited, not a wall but communicated so visit now
+        ; if all the neighbor candidates are not visited but all are communicated, then no choice, so move to one of the communicated
         [
-          let parent patch-here
-          move-to one-of candidates
-          set num-steps num-steps + 1
-          ask patch-here [
-            if isvisited = true [show pxcor ]
-            set isvisited true
-            set visited-by (turtle-set visited-by myself)
-          ]
-
-          ask patch-here [set parent-patch parent]
-          set visited (patch-set visited patch-here)
-          set stack (patch-set stack patch-here)
+          moveToOneOf candidates
         ]
       ]
       ; if no neighbors, backtrack
       [
-        let parent-of-curr [parent-patch] of self
-        set stack stack with [self != myself]
-        ifelse parent-of-curr = NoBody [die]
-        [
-          move-to parent-of-curr
-          set num-steps num-steps + 1
-        ]
+        backtrackFromHere
       ]
       if pcolor = red and exit-found = false [
         set finished true
@@ -304,6 +249,28 @@ to path-finder-updated
   ]
 end
 
+to backtrackFromHere
+  let parent-of-curr [parent-patch] of self
+  ifelse parent-of-curr = NoBody [die]
+  [
+    move-to parent-of-curr
+    set num-steps num-steps + 1
+  ]
+end
+
+to moveToOneOf [candidates]
+    let parent patch-here
+    move-to one-of candidates
+    set num-steps num-steps + 1
+    ask patch-here [
+      set isvisited true
+      set visited-by (turtle-set visited-by myself)
+    ]
+
+    ask patch-here [set parent-patch parent]
+    set visited (patch-set visited patch-here)
+end
+
 to-report is-wall [curr]
   ifelse [pcolor] of curr = white [ report true ] [report false ]
 end
@@ -311,62 +278,19 @@ end
 
 to path-finder-basic
   ask turtles with [finished = false] [
-    ; check if self (candidate which is a patch) is not visited. Since visited/history is turtle's attribute
+    ; check if self (candidate which is a patch) is not visited
     let candidates neighbors4 with [not member? self [visited] of myself and not is-wall self ]
     ifelse any? candidates
       [
-        let parent patch-here
-        move-to one-of candidates
-        set num-steps num-steps + 1
-
-        ask patch-here [set parent-patch parent]
-        ; patch-set creates a patch-set = [ [history], patch-here ]
-        set visited (patch-set visited patch-here)
-        set stack (patch-set stack patch-here)
-        set isvisited  true
+        moveToOneOf candidates
       ]
       ; if stuck ie no neighbors then backtrack
       [
-       let parent-of-curr [parent-patch] of self
-       set stack stack with [self != myself]
-       ifelse parent-of-curr = NoBody [die]
-       [
-        move-to parent-of-curr
-        set num-steps num-steps + 1
-      ]
+        backtrackFromHere
       ]
     if pcolor = red [set finished true]
   ]
 end
-
-
-
-
-
-
-
-
-;to square
-;repeat 5 [
-;  fd 10
-;  right 90
-;]
-;end
-;
-;pen-down
-;
-;; only turtles can call the square procedure
-;ask turtles [square]
-;
-;;;; breed
-;;; observer methods
-;;; agent method
-;
-;[color] of cats
-;^^attribute/to-report method ^^^ agentset
-;
-;sort cats
-;     ^^^ agentset/list
 @#$#@#$#@
 GRAPHICS-WINDOW
 315
