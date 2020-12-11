@@ -1,0 +1,22 @@
+Stratagies and possible demonstration
+1. NO collaboration -> Random
+2. Collaboration without pioneer (decentralized) -> More Dispersion factor
+3. Collaboration with Pioneer -> FAster exit
+
+
+Tower Communication
+    1. Robots move
+    2. Whenever they are near a Tower, they exchange messages
+    3. The tower can have infinite memory so can store all messages, while robots only have a limited space 
+    (limited visited, limited communicated, unlimited buffer) -> cannot be implemented 
+    4. The Pioneer robot Communicates, that exit-found and pioneer to near by towers, so they can tell other robots
+
+    Tower generation from mouse
+    No. of message exchanges
+    No. of message processed
+
+
+    Stratagies
+    1. Collab-off -> more steps, more message exchanges, more message processed
+    2. collab-on + Decentralized -> less-steps with pioneer, communication range not implemented yet
+    3. Collab-on + centralized -> not much faster but lesser message exchanges

@@ -1,22 +1,36 @@
 globals [
   patch-data dimX dimY row i j
-  ; following needs to be defined as turtles attributes
-  exit-found pioneer
+  num-message-exchanges
 ]
+breed [circles circle]
 
-turtles-own [
-  visited ; patch-set -> all patches visited by the turtle
-  message-buffer ; patch-set -> every 10th tick turtles recieves set of patches communicated by other turtles
-  communicated ; patch-set -> all patches which may be visited by the turtle but communicated by the peer turtles;
-  finished ; bool -> if finished, turtle do not move
-  isleader ; bool -> true if the turtle is leader for current message passing
-  num-steps ; int -> num of steps travelled by the turtle
+breed [robots robot]
+robots-own [
+  visited ; patch-set -> all patches visited by the robot
+  message-buffer ; patch-set -> every 10th tick robots recieves set of patches communicated by other robots
+  communicated ; patch-set -> all patches which may be visited by the robot but communicated by the peer robots;
+  finished ; bool -> if finished, robot do not move
+  isleader ; bool -> true if the robot is leader for current message passing
+  num-steps ; int -> num of steps travelled by the robot
+  ; memory-size
+  last-updated ; ticks
+  exit-found
+  pioneer
 ]
 patches-own [
-  parent-patch ; patch -> the patch from which turtle moved to this patch
-  isvisited ; bool -> if the patch is visited by any of the turtles
+  parent-patch ; patch -> the patch from which robot moved to this patch
+  isvisited ; bool -> if the patch is visited by any of the robots
   visited-by; turtle-set -> set of robots visited this patch
 ]
+
+breed [towers tower]
+towers-own [
+  pioneer
+  exit-found
+  memory
+  message-buffer
+]
+
 
 to load-own-patch-data
   let file user-file
@@ -49,11 +63,12 @@ to-report get-color [char]
   if char = "c" [report yellow]
   if char = "B" [report red]
   if char = "E" [report blue]
+  if char = "T" [report pink]
 end
 
 to show-patch-data
   clear-patches
-  clear-turtles
+  clear-robots
   ifelse ( is-list? patch-data )
     [ foreach patch-data [ ?1 -> ask patch first ?1 item 1 ?1 [ set pcolor last ?1 ] ] ]
     [ user-message "You need to load in patch data first!" ]
@@ -61,29 +76,56 @@ to show-patch-data
 end
 
 
+to clear-towers
+  ask towers [die]
+end
+to clear-robots
+  ask robots [die]
+end
+
+
 to setup
+  ;clear-all
+  set num-message-exchanges 0
   reset-ticks
-  clear-all-turtles
+  clear-robots
+  clear-towers
   clear-drawing
   init-patches
-  init-turtles-at-source
+  init-robots-at-source
+  init-towers
+end
+
+to init-towers
+  ask patches with [pcolor = pink]
+  [
+    sprout-towers 1
+    sprout-circles 1 [set shape "circle 3" set xcor pxcor set ycor pycor set size comm-range * 2 stamp die]
+  ]
+  ask towers [
+      set shape "flag"
+      set message-buffer (patch-set patch-here)
+      set memory (patch-set)
+      set exit-found false
+      set pioneer nobody
+  ]
 end
 
 to init-patches
   ask patches [
     set isvisited false
-    set visited-by (turtle-set); initializing empty turtle set
+    set visited-by (turtle-set); initializing empty robot set
   ]
 
 end
 
-to clear-all-turtles
-  ask turtles [die]
+to clear-all-robots
+  ask robots [die]
 end
 
-to init-turtles-at-source
-  create-turtles num-turtles
-  ask turtles [
+to init-robots-at-source
+  create-robots num-robots
+  ask robots [
     set isleader false
     set finished false
     move-to one-of patches with [pcolor = blue]
@@ -93,12 +135,14 @@ to init-turtles-at-source
     set communicated (patch-set) ; empty communicated since no communication happened
     set exit-found false
     set num-steps 0
-
+    set last-updated 0
     set visited (patch-set visited patch-here) ; updating visited by adding current patch
+    set exit-found false
+    set pioneer nobody
   ask patch-here [
     set parent-patch NoBody
     set isvisited true
-    set visited-by (turtle-set visited-by myself) ; myself = turtle which called ask patch-here;
+    set visited-by (turtle-set visited-by myself) ; myself = robot which called ask patch-here;
   ]
  ]
 end
@@ -109,7 +153,7 @@ to go
   [path-finder-collaboration]
   [path-finder-basic]
 
-  if [pcolor] of turtles = red [stop]
+  if [pcolor] of robots = red [stop]
   tick
 end
 
@@ -123,38 +167,80 @@ end
 
 ; collaborative path finding
 to path-finder-collaboration
-  ifelse (ticks mod 10) = 0 ; every ten ticks, communicate
+  ifelse (ticks mod 11) = 0 ; every ten ticks, communicate
   [
-    ; elect leader -> choose one randomly
-    let leader one-of turtles
-
-    ; leader has empty message-buffer
-    ask leader [
-      set isleader true
+    ifelse communication-type = "Decentralized"
+    [
+      leader-election-communication-normal
+      ;leader-election-communication-rangeBased
+    ]
+    [
+      tower-communication
     ]
 
-    ; other turtles send their visited nodes info as messages to leader
-    ask turtles with [isleader = false] [
-      create-link-to leader
-      send-message-to-leader self leader
-    ]
-
-    ; leader then sends the combined message-buffer
-    ask leader [ send-knowledge-base leader]
-
-    ;everyone process-messages -> move messages to visited
-    ask turtles [process-messages]
-
-    ; remove leader
-    ask leader [
-      set isleader false
-    ]
   ]
   [ ; when not communicating, move
     if any? links [ask links [die]]
-    path-finder-updated;
+      path-finder-collab-pioneer;
   ]
 end
+
+to tower-communication
+  ask robots [
+    if (any? towers in-radius comm-range) and (ticks - last-updated > 5) [
+
+      set num-message-exchanges num-message-exchanges + 1
+
+      set last-updated ticks
+      let curr-tower one-of towers in-radius comm-range
+      create-link-to curr-tower
+      ; send current knowledge base to tower
+      ; tower then sends the combined message-buffer
+      ask curr-tower [
+        set message-buffer [visited] of myself
+        set memory (patch-set memory message-buffer)
+        set message-buffer(patch-set)
+      ]
+
+      set exit-found [exit-found] of curr-tower
+      set pioneer [pioneer] of curr-tower
+      set message-buffer [memory] of curr-tower
+
+      ;everyone process-messages -> move messages to visited
+      process-messages
+    ]
+  ]
+end
+
+
+to leader-election-communication-normal
+   ; elect leader -> choose one randomly
+  let leader one-of robots
+
+  ; leader has empty message-buffer
+  ask leader [
+    set isleader true
+  ]
+
+  ; other robots send their visited nodes info as messages to leader
+  ask robots with [isleader = false] [
+    create-link-to leader
+    send-message-to-leader self leader
+    set num-message-exchanges num-message-exchanges + 1
+  ]
+
+  ; leader then sends the combined message-buffer
+  ask leader [ send-knowledge-base leader]
+
+  ;everyone process-messages -> move messages to visited
+  ask robots [process-messages]
+
+  ; remove leader
+  ask leader [
+    set isleader false
+  ]
+end
+
 
 to process-messages
   ;show who
@@ -177,6 +263,7 @@ to send-knowledge-base [leader]
     ask link-neighbors [
       ; show who
       ; show message-buffer
+      set num-message-exchanges num-message-exchanges + 1
       set message-buffer (patch-set [message-buffer] of leader)
       ; show message-buffer
     ]
@@ -190,19 +277,20 @@ to send-message-to-leader [curr leader]
   ]
 end
 
-to path-finder-updated
-  ask turtles with [finished = false][
-    ifelse exit-found = true ; if any of the turtles found the exit; then follow the pioneer's path
+to path-finder-collab-pioneer
+  ask robots with [finished = false][
+    ifelse exit-found = true ; if any of the robots found the exit; then follow the pioneer's path
     [
       ; 2nd phase, Following Pioneer's path
       let current-patch-visited-by [visited-by] of patch-here ; set of agents who visited current patch
       ifelse member? pioneer current-patch-visited-by
       [
-        ; if current patch is visited by the pioneer turtle, trace the path of the pioneer turtle which is not visited by current turtle
+        ; if current patch is visited by the pioneer robot, trace the path of the pioneer robot which is not visited by current robot
+        let pioneer-visited [visited] of pioneer
         let candidates neighbors4 with [
           not is-wall self and
           not member? self [visited] of myself and
-          member? self [visited] of pioneer
+          member? self pioneer-visited
         ]
         ifelse any? candidates
         [
@@ -212,7 +300,7 @@ to path-finder-updated
           backTrackFromHere
         ]
       ]
-      ; if current patch is not visited by the pioneer turtle, backtrack
+      ; if current patch is not visited by the pioneer robot, backtrack
       [
         backtrackFromHere
       ]
@@ -222,32 +310,45 @@ to path-finder-updated
     ]
     ; 1st phase
     [
-      let candidates neighbors4 with [not member? self [visited] of myself and not is-wall self]
-      ifelse any? candidates
-      [
-        let not-communicated-candidates candidates with [not member? self [communicated] of myself]
-        ifelse any? not-communicated-candidates
-        ; if any candidate neighbor is present which is neither visited nor communicated
-        [
-          moveToOneOf not-communicated-candidates
-        ]
-        ; if all the neighbor candidates are not visited but all are communicated, then no choice, so move to one of the communicated
-        [
-          moveToOneOf candidates
-        ]
-      ]
-      ; if no neighbors, backtrack
-      [
-        backtrackFromHere
-      ]
-      if pcolor = red and exit-found = false [
-        set finished true
-        set exit-found true
-        set pioneer self
-      ]
+      path-finder-collab
     ]
   ]
 end
+
+to path-finder-collab
+    let candidates neighbors4 with [not member? self [visited] of myself and not is-wall self]
+    ifelse any? candidates
+    [
+      let not-communicated-candidates candidates with [not member? self [communicated] of myself]
+      ifelse any? not-communicated-candidates
+      ; if any candidate neighbor is present which is neither visited nor communicated
+      [
+        moveToOneOf not-communicated-candidates
+      ]
+      ; if all the neighbor candidates are not visited but all are communicated, then no choice, so move to one of the communicated
+      [
+        moveToOneOf candidates
+      ]
+    ]
+    ; if no neighbors, backtrack
+    [
+      backtrackFromHere
+    ]
+    if pcolor = red and exit-found = false [
+      set finished true
+    ask robots [
+      set pioneer myself
+      set exit-found true
+    ]
+    ask towers in-radius comm-range [
+      set exit-found true
+      set pioneer myself
+    ]
+    ]
+    if pcolor = red [set finished true]
+
+end
+
 
 to backtrackFromHere
   let parent-of-curr [parent-patch] of self
@@ -272,12 +373,12 @@ to moveToOneOf [candidates]
 end
 
 to-report is-wall [curr]
-  ifelse [pcolor] of curr = white [ report true ] [report false ]
+  ifelse (pcolor = white or pcolor = pink) [ report true ] [report false ]
 end
 
 
 to path-finder-basic
-  ask turtles with [finished = false] [
+  ask robots with [finished = false] [
     ; check if self (candidate which is a patch) is not visited
     let candidates neighbors4 with [not member? self [visited] of myself and not is-wall self ]
     ifelse any? candidates
@@ -290,6 +391,24 @@ to path-finder-basic
       ]
     if pcolor = red [set finished true]
   ]
+end
+
+to leader-election-communication-rangeBased
+  ; Effects
+  ; 1. Based on num of messages, time to process message varies
+  ; 2. More num of messages, more is battery used
+  ; 3. Bluetooth and wifi -> effects battery
+  ; 4. Tower ->  Central communication
+  ; 5. Multiple experiments -> Numof Message processed, Optimal num of Robots, Total time, total battery used
+
+  ;  leaders [T1, T9, T13]  -> n-of robots which are x distance away
+  ;  ask robots not leaders [commmunicate-with one-of in leaders]
+  ; Flow
+  ; 1. Leader election
+  ;    2. Randomly set of leaders
+  ;    1. set of leaders which are at a specific range from each other
+  ;    3. BFS
+  ; 2. Communication
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -403,11 +522,11 @@ SLIDER
 264
 192
 297
-num-turtles
-num-turtles
+num-robots
+num-robots
 1
 50
-28.0
+21.0
 1
 1
 NIL
@@ -430,7 +549,7 @@ MONITOR
 1191
 378
 Avg num steps
-sum [num-steps] of turtles / count turtles
+sum [num-steps] of robots / count robots
 17
 1
 11
@@ -441,7 +560,43 @@ MONITOR
 1177
 328
 Total Steps
-sum [num-steps] of turtles
+sum [num-steps] of robots
+17
+1
+11
+
+SLIDER
+1329
+215
+1501
+248
+comm-range
+comm-range
+1
+20
+10.0
+1
+1
+NIL
+HORIZONTAL
+
+CHOOSER
+25
+384
+195
+429
+communication-type
+communication-type
+"central" "Decentralized"
+0
+
+MONITOR
+1052
+423
+1234
+468
+num-message-exchanges
+num-message-exchanges
 17
 1
 11
@@ -554,6 +709,11 @@ false
 0
 Circle -7500403 true true 0 0 300
 Circle -16777216 true false 30 30 240
+
+circle 3
+true
+0
+Circle -955883 false false -2 -2 302
 
 cow
 false
