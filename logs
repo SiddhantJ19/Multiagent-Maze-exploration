@@ -15,6 +15,9 @@ Tower Communication
     No. of message exchanges
     No. of message processed
 
+    battery - steps
+              message
+    leader - extra drainage  
 
     Stratagies
     1. Collab-off -> more steps, more message exchanges, more message processed

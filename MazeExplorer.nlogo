@@ -336,13 +336,18 @@ to path-finder-collab
     ]
     if pcolor = red and exit-found = false [
       set finished true
-    ask robots [
-      set pioneer myself
-      set exit-found true
+    ifelse communication-type = "Decentralized"
+    [
+      ask robots [
+        set pioneer myself
+        set exit-found true
+      ]
     ]
-    ask towers in-radius comm-range [
-      set exit-found true
-      set pioneer myself
+    [
+      ask towers in-radius comm-range [
+        set exit-found true
+        set pioneer myself
+      ]
     ]
     ]
     if pcolor = red [set finished true]
@@ -574,7 +579,7 @@ comm-range
 comm-range
 1
 20
-10.0
+4.0
 1
 1
 NIL
