@@ -351,8 +351,9 @@ to path-finder-collab-pioneer
       path-finder-collab
     ]
     if pcolor = red [
-    set finished true
-    ask robots in-radius comm-range [
+      set finished true
+      set exit-found true
+     ask robots in-radius comm-range [
       set pioneer [pioneer] of myself
       set exit-found true
     ]
@@ -384,6 +385,7 @@ to path-finder-collab
 
     if pcolor = red and exit-found = false [
       set finished true
+      set exit-found true
     ifelse communication-type = "Decentralized"
     [
       ask robots in-radius comm-range[
@@ -400,8 +402,13 @@ to path-finder-collab
     ]
     if pcolor = red [
     set finished true
+    set exit-found true
     ask robots in-radius comm-range [
-      set pioneer [pioneer] of myself
+      ifelse [pioneer] of myself = nobody
+      [
+        set pioneer myself
+
+      ]
       set exit-found true
     ]
   ]
@@ -631,7 +638,7 @@ CHOOSER
 communication-type
 communication-type
 "central" "Decentralized"
-1
+0
 
 MONITOR
 1052
@@ -767,7 +774,7 @@ The Communication flow is as follows
 **The Motion of robots is same as described in the decentralized approach**
 
 ## Analysis
-![analysis1](file:/home/siddhant/Desktop/Multiagent_Maze_Exploration/Experiments/.png)
+![analysis1](file:/home/siddhant/Desktop/Multiagent_Maze_Exploration/Experiments/5.png)
 
 ## Assumptions
 1. Infinite memory - Modern Robotics carry enough memory to mask a lidar point cloud of a whole factory
