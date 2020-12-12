@@ -126,6 +126,7 @@ end
 to init-robots-at-source
   create-robots num-robots
   ask robots [
+    set color red
     set isleader false
     set finished false
     move-to one-of patches with [pcolor = blue]
@@ -186,7 +187,7 @@ to path-finder-collaboration
 end
 
 to tower-communication
-  ask robots [
+  ask robots with [ pcolor != red] [
     if (any? towers in-radius comm-range) and (ticks - last-updated > 5) [
 
       set num-message-exchanges num-message-exchanges + 1
@@ -215,15 +216,17 @@ end
 
 to leader-election-communication-normal
    ; elect leader -> choose one randomly
-  let leader one-of robots
+  if [pcolor] of robots = red [stop]
 
+  let leader one-of robots with [pcolor != red]
+  if leader = nobody [stop]
   ; leader has empty message-buffer
   ask leader [
     set isleader true
   ]
 
   ; other robots send their visited nodes info as messages to leader
-  ask robots with [isleader = false] [
+  ask robots with [isleader = false and pcolor != red] [
     create-link-to leader
     send-message-to-leader self leader
     set num-message-exchanges num-message-exchanges + 1
@@ -417,13 +420,13 @@ to leader-election-communication-rangeBased
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-315
-61
-923
-670
+265
+10
+1041
+787
 -1
 -1
-20.0
+10.97143
 1
 10
 1
@@ -434,9 +437,9 @@ GRAPHICS-WINDOW
 0
 1
 0
-29
+69
 0
-29
+69
 1
 1
 1
@@ -531,7 +534,7 @@ num-robots
 num-robots
 1
 50
-21.0
+20.0
 1
 1
 NIL
@@ -579,7 +582,7 @@ comm-range
 comm-range
 1
 20
-4.0
+13.0
 1
 1
 NIL
@@ -593,7 +596,7 @@ CHOOSER
 communication-type
 communication-type
 "central" "Decentralized"
-0
+1
 
 MONITOR
 1052
