@@ -23,3 +23,35 @@ Tower Communication
     1. Collab-off -> more steps, more message exchanges, more message processed
     2. collab-on + Decentralized -> less-steps with pioneer, communication range not implemented yet
     3. Collab-on + centralized -> not much faster but lesser message exchanges
+
+
+["comm-range" 14]
+["num-robots" 5 10 20 30 50 60 80 100 120 150 200 250 300]
+["communication-type" "central"]
+["collaboration" true]
+
+
+ticks
+sum [num-steps] of robots / count robots
+100 * count patches with [ isvisited = true] / count patches with [pcolor = yellow]
+num-message-exchanges / num-robots
+
+all? robots [pcolor = red]
+
+
+eshaan 70 70
+Collab off vs on-centralCollab
+1. without collab we get higher maze exploration rate
+2. Also the average number of steps can vary as much as 3 times the the average number of steps with collab
+3. Avg messages also add up for efficiency calculation
+
+eshaan 30 30
+same 2 points verifying for another matrix size
+
+
+Bunty 70 70
+decentralized approach
+Battery drain increases with number of robots or efficiency decreases
+with communication range equals 1/5th of the dimension of maze
+
+30 30

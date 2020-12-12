@@ -6,17 +6,16 @@ breed [circles circle]
 
 breed [robots robot]
 robots-own [
-  battery-drainage
   visited ; patch-set -> all patches visited by the robot
   message-buffer ; patch-set -> every 10th tick robots recieves set of patches communicated by other robots
   communicated ; patch-set -> all patches which may be visited by the robot but communicated by the peer robots;
   finished ; bool -> if finished, robot do not move
   isleader ; bool -> true if the robot is leader for current message passing
   num-steps ; int -> num of steps travelled by the robot
+  ; memory-size
   last-updated ; ticks
   exit-found
   pioneer
-  my-leader
 ]
 patches-own [
   parent-patch ; patch -> the patch from which robot moved to this patch
@@ -127,10 +126,12 @@ end
 to init-robots-at-source
   create-robots num-robots
   ask robots [
+    ;set color red
     set isleader false
     set finished false
     move-to one-of patches with [pcolor = blue]
-    set pen-size 2
+    set pen-size 5
+    ;if memory-type = ""
     set visited (patch-set) pd ; initializing empty visited
     set message-buffer (patch-set) ; empty message buffer since no communication happened
     set communicated (patch-set) ; empty communicated since no communication happened
@@ -140,7 +141,6 @@ to init-robots-at-source
     set visited (patch-set visited patch-here) ; updating visited by adding current patch
     set exit-found false
     set pioneer nobody
-    set battery-drainage 0
   ask patch-here [
     set parent-patch NoBody
     set isvisited true
@@ -154,9 +154,18 @@ to go
   ifelse collaboration = true
   [path-finder-collaboration]
   [path-finder-basic]
-  if all? robots [pcolor = red] [stop]
+
+  if [pcolor] of robots = red [stop]
   tick
 end
+
+; TODO:
+; 1. Communication range, (bsaed on some real factors, for validation), slider for communication range
+; 3. Define Battery and counsumption in walking and communication (based on real data on battery)
+; 2. Leader Election, (based on  battery, radnom)
+; 5. Stratagy to cover maze as soon as possible instead of finding the exit
+; 6. Optimal size of robots for a n*m size maze, Optimality based on (steps, messages, time)
+; 4. Currenty ticks are in sync of all robots, in a distributed setting this is not true, Can we have a switch with ticks not synchronised
 
 ; collaborative path finding
 to path-finder-collaboration
@@ -164,8 +173,8 @@ to path-finder-collaboration
   [
     ifelse communication-type = "Decentralized"
     [
-      ;leader-election-communication-normal
-      leader-election-communication-rangeBased
+      leader-election-communication-normal
+      ;leader-election-communication-rangeBased
     ]
     [
       tower-communication
@@ -179,12 +188,10 @@ to path-finder-collaboration
 end
 
 to tower-communication
-  ask robots [
-    if (any? towers in-radius comm-range) ;and (ticks - last-updated > 5)
-    [
+  ask robots with [ pcolor != red] [
+    if (any? towers in-radius comm-range) and (ticks - last-updated > 5) [
 
       set num-message-exchanges num-message-exchanges + 1
-      set battery-drainage battery-drainage + comm-range * communication-range-battery-drainage-factor
 
       set last-updated ticks
       let curr-tower one-of towers in-radius comm-range
@@ -210,27 +217,24 @@ end
 
 to leader-election-communication-normal
    ; elect leader -> choose one randomly
-  let leader one-of robots
+  if [pcolor] of robots = red [stop]
 
+  let leader one-of robots with [pcolor != red]
+  if leader = nobody [stop]
   ; leader has empty message-buffer
   ask leader [
     set isleader true
   ]
 
   ; other robots send their visited nodes info as messages to leader
-  ask robots with [isleader = false] [
-    set battery-drainage battery-drainage + comm-range * communication-range-battery-drainage-factor
+  ask robots with [isleader = false and pcolor != red] [
     create-link-to leader
     send-message-to-leader self leader
     set num-message-exchanges num-message-exchanges + 1
   ]
 
   ; leader then sends the combined message-buffer
-  ask leader [
-    let num-connected-neighbours count link-neighbors
-    set battery-drainage battery-drainage + comm-range * communication-range-battery-drainage-factor * num-connected-neighbours
-    send-knowledge-base leader
-  ]
+  ask leader [ send-knowledge-base leader]
 
   ;everyone process-messages -> move messages to visited
   ask robots [process-messages]
@@ -241,47 +245,6 @@ to leader-election-communication-normal
   ]
 end
 
-to leader-election-communication-rangeBased
-  ;ask turtles [ show turtles in-radius 1 ]
-  let queue []
-  let comm-visited []
-  let leader-who 0
-  ask robots [
-    if not member? who comm-visited [
-      ; leader has no leader
-      set my-leader nobody
-      set leader-who who
-      let candidates robots in-radius comm-range
-
-      let num-connected-neighbours (count candidates) - 1
-      set num-message-exchanges num-message-exchanges + num-connected-neighbours
-      set battery-drainage battery-drainage + comm-range * communication-range-battery-drainage-factor * num-connected-neighbours
-      set queue sort [who] of candidates
-      foreach queue [x ->
-        if not member? x comm-visited[
-          if x != who [
-            ask robot x [
-              set num-message-exchanges num-message-exchanges + 1
-              set battery-drainage battery-drainage + comm-range * communication-range-battery-drainage-factor
-              set my-leader leader-who
-              ; send message to leader
-              send-message-to-leader self (robot leader-who)
-              create-link-to robot leader-who
-            ]
-            set comm-visited insert-item 0 comm-visited x
-          ]
-        ]
-      ]
-
-      ; send back messages to peer
-      send-knowledge-base robot leader-who
-    ]
-  ]
-
-  ;everyone process-messages -> move messages to visited
-  ask robots [process-messages]
-
-end
 
 to process-messages
   ;show who
@@ -345,18 +308,14 @@ to path-finder-collab-pioneer
       [
         backtrackFromHere
       ]
+      if pcolor = red [
+        set finished true
+      ]
     ]
     ; 1st phase
     [
       path-finder-collab
     ]
-    if pcolor = red [
-    set finished true
-    ask robots in-radius comm-range [
-      set pioneer [pioneer] of myself
-      set exit-found true
-    ]
-  ]
   ]
 end
 
@@ -379,14 +338,11 @@ to path-finder-collab
     [
       backtrackFromHere
     ]
-
-    set battery-drainage battery-drainage + 1
-
     if pcolor = red and exit-found = false [
       set finished true
     ifelse communication-type = "Decentralized"
     [
-      ask robots in-radius comm-range[
+      ask robots [
         set pioneer myself
         set exit-found true
       ]
@@ -398,13 +354,7 @@ to path-finder-collab
       ]
     ]
     ]
-    if pcolor = red [
-    set finished true
-    ask robots in-radius comm-range [
-      set pioneer [pioneer] of myself
-      set exit-found true
-    ]
-  ]
+    if pcolor = red [set finished true]
 
 end
 
@@ -448,20 +398,36 @@ to path-finder-basic
       [
         backtrackFromHere
       ]
-
-    set battery-drainage battery-drainage + 1
     if pcolor = red [set finished true]
   ]
 end
+
+to leader-election-communication-rangeBased
+  ; Effects
+  ; 1. Based on num of messages, time to process message varies
+  ; 2. More num of messages, more is battery used
+  ; 3. Bluetooth and wifi -> effects battery
+  ; 4. Tower ->  Central communication
+  ; 5. Multiple experiments -> Numof Message processed, Optimal num of Robots, Total time, total battery used
+
+  ;  leaders [T1, T9, T13]  -> n-of robots which are x distance away
+  ;  ask robots not leaders [commmunicate-with one-of in leaders]
+  ; Flow
+  ; 1. Leader election
+  ;    2. Randomly set of leaders
+  ;    1. set of leaders which are at a specific range from each other
+  ;    3. BFS
+  ; 2. Communication
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
-314
-52
-914
-653
+265
+10
+1041
+787
 -1
 -1
-19.73333333333334
+10.97143
 1
 10
 1
@@ -472,9 +438,9 @@ GRAPHICS-WINDOW
 0
 1
 0
-29
+69
 0
-29
+69
 1
 1
 1
@@ -568,8 +534,8 @@ SLIDER
 num-robots
 num-robots
 1
-200
-20.0
+50
+300.0
 1
 1
 NIL
@@ -609,15 +575,15 @@ sum [num-steps] of robots
 11
 
 SLIDER
-21
-447
-193
-480
+22
+440
+194
+473
 comm-range
 comm-range
 1
-50
-10.0
+20
+20.0
 1
 1
 NIL
@@ -631,58 +597,15 @@ CHOOSER
 communication-type
 communication-type
 "central" "Decentralized"
-1
+0
 
 MONITOR
 1052
 423
-1211
+1292
 468
-num-message-exchanges
-num-message-exchanges
-17
-1
-11
-
-MONITOR
-203
-169
-260
-214
-leaders
-count robots with [my-leader = nobody]
-17
-1
-11
-
-INPUTBOX
-1312
-242
-1568
-302
-communication-range-battery-drainage-factor
-2.0
-1
-0
-Number
-
-TEXTBOX
-1311
-310
-1567
-385
-This can be based on wireless technology, protocols, number of communication handshakes
-12
-0.0
-1
-
-MONITOR
-1308
-401
-1487
-446
-average-battery-drainage
-sum [battery-drainage] of robots / num-robots
+num-message-exchanges-average
+num-message-exchanges / num-robots
 17
 1
 11
@@ -697,51 +620,17 @@ The modelling is being done to find good stratagies to improve reliability, rest
 
 This model implements search and rescue robots as agents and the goal for the swarm is not only to find the exit but all the agents must reach the exit.
 
-This implementation can help in deciding optimal number of robot agents needed to solve a maze of certain size. Optimality of Swarm depends on
-
-1 Time taken to solve the maze
-2 Resources use
-2.1 Battery Usage
-2.2 Number of Message Exchanges
-2.3 Number of steps
-3 Percentage of Maze explored
-
-## Agents
-### Robots
-#### Behavior
-1. Traverse Maze
-2. Commuincates with other robots
-3. Communicates with Towers
-4. Decides on direction to visit based on Knowledge Base
-
-#### Attributes
-1. Battery - Modelled as Battery Drainage. Depends on steps covered, communication distance, communication technology, communication stratagy (leader vs no leader)
-2. Communication range - same for all robots
-3. Communication technology - same for all robots. This factor inculcates any communication technology and effects battery.
-4. Memory - Infinite memory
-
-### Towers
-
-#### Behavior
-1. Communicate with robots
-
-#### Attributes
-2. Communication range
-3. Memory - Infinite Memory
-
 ## Implementation
 
-To solve the maze, we have implemented 3 stratagies. 1 Non-Collaborative and 2 collaborative stratagies.
-
-### Non-collaborative (Independent) Exploration .
+There are 2 modes in the modell.
+1. Independent Exploration.
 The robots search for exit on their own. There are noways of collaboration.
 The robots maintain the record of the cells they have visited and recursively finds the exit.
-### Collaborative Exploration - Decentralized
-
+2.  Collaborative exploration
 Every 10 ticks, the robots communicate. The communication is done as follows
 
-1. Leader Election - Set of leader robots are elected such that **distance between any 2 leaders > communication range**
-2. Data-Collection - The robots send their visited record to their corresponding leader
+1. Leader Election - A leader is elected among the robots, (currently at random)
+2. Data-Collection - The robots send their visited record to the leader
 3. Data-Distribution - The leader then distributes the collected knowledge base to peers
 4. Data Processing - The robots recieve the message from the leader and store it    in-memory but seperate from their own visited records
 
@@ -753,28 +642,15 @@ At every junction a turtle has the follwing order of preference
 2. If all neighbors are either visited or communicated, go to the communicated neighbor
 3. If no neighbor or all neighbors visited, bactrack the path
 
-Finally, if one of the robots reaches the exit, the peers (within the range) are communicated that the exit has been found and which robot (pioneer) found the exit. 
+Finally, if one of the robots reaches the exit, the peers are communicated that the exit has been found and which robot (pioneer) found the exit. 
 The robots then try to find the respective nearest node common with the pioneer. Once the common node is found they trace the pioneer's path which is guaranteed to lead to the exit.
 
-### Collaborative Exploration - Centralized
-In situations where individual robots are incapable of behaving as leaders, a more centralized approach is used where central towers help robots navigate through the unknown territory. This also depends on economic and structural feasibility of such towers.
-
-The Communication flow is as follows
-
-1. Every 10th tick, the towers communicate with nearby robots and exchange KB
-2. The towers and robots update their KB from the robots
-
-**The Motion of robots is same as described in the decentralized approach**
-
 ## Analysis
-![analysis1](file:/home/siddhant/Desktop/Multiagent_Maze_Exploration/Experiments/5.png)
 
-## Assumptions
-1. Infinite memory - Modern Robotics carry enough memory to mask a lidar point cloud of a whole factory
-2. Every Message exchange takes one tick, this can however be varied based on the communication distance
-
-## References
-
+1. Difference between percentage of maze explored using 2 stratgies
+2. Average number of steps a robot takes based on 2 stratagies
+3. Toatal steps / Total messages / Time taken to compare efficiency of smaller and larger groups
+4. Time taken (ticks) for the group to reach the exit
 @#$#@#$#@
 default
 true
@@ -1077,31 +953,26 @@ need-to-manually-make-preview-for-this-model
     <metric>sum [num-steps] of robots / count robots</metric>
     <metric>100 * count patches with [ isvisited = true] / count patches with [pcolor = yellow]</metric>
     <metric>num-message-exchanges / num-robots</metric>
-    <metric>sum [battery-drainage] of robots / num-robots</metric>
     <enumeratedValueSet variable="comm-range">
       <value value="14"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="num-robots">
-      <value value="1"/>
-      <value value="2"/>
-      <value value="5"/>
-      <value value="3"/>
-      <value value="4"/>
-      <value value="10"/>
       <value value="5"/>
       <value value="10"/>
       <value value="20"/>
-      <value value="40"/>
+      <value value="30"/>
+      <value value="50"/>
+      <value value="60"/>
       <value value="80"/>
       <value value="100"/>
+      <value value="120"/>
       <value value="150"/>
       <value value="200"/>
+      <value value="250"/>
+      <value value="300"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="communication-type">
-      <value value="&quot;Decentralized&quot;"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="communication-range-battery-drainage-factor">
-      <value value="2"/>
+      <value value="&quot;central&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="collaboration">
       <value value="true"/>
