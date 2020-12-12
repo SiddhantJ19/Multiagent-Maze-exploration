@@ -126,7 +126,7 @@ end
 to init-robots-at-source
   create-robots num-robots
   ask robots [
-    set color red
+    ;set color red
     set isleader false
     set finished false
     move-to one-of patches with [pcolor = blue]
@@ -535,7 +535,7 @@ num-robots
 num-robots
 1
 50
-20.0
+4.0
 1
 1
 NIL
@@ -597,7 +597,7 @@ CHOOSER
 communication-type
 communication-type
 "central" "Decentralized"
-1
+0
 
 MONITOR
 1052
