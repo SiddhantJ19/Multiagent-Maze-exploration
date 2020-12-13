@@ -55,3 +55,11 @@ Battery drain increases with number of robots or efficiency decreases
 with communication range equals 1/5th of the dimension of maze
 
 30 30
+
+
+Experiments
+30X30
+1. decentralized, 2 communication ranges -> 5 20
+numofTurtles 2...100
+
+2. 

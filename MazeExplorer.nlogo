@@ -1,38 +1,54 @@
 globals [
   patch-data dimX dimY row i j
+  ; global counter
   num-message-exchanges
 ]
 breed [circles circle]
 
 breed [robots robot]
+
+breed [towers tower]
+
 robots-own [
-  battery-drainage
+  battery-drainage ; for overall analysis
+
   visited ; patch-set -> all patches visited by the robot
   message-buffer ; patch-set -> every 10th tick robots recieves set of patches communicated by other robots
   communicated ; patch-set -> all patches which may be visited by the robot but communicated by the peer robots;
+
   finished ; bool -> if finished, robot do not move
+
   isleader ; bool -> true if the robot is leader for current message passing
+
   num-steps ; int -> num of steps travelled by the robot
-  last-updated ; ticks
-  exit-found
-  pioneer
+;  last-updated ; ticks
+
+  ; when pioneer broadcasts
+  exit-found ; bool;
+  pioneer   ; robot
+
+; new implementation of decentralized comm
   my-leader
 ]
+
 patches-own [
   parent-patch ; patch -> the patch from which robot moved to this patch
   isvisited ; bool -> if the patch is visited by any of the robots
-  visited-by; turtle-set -> set of robots visited this patch
+
+  visited-by ; turtle-set -> set of robots visited this patch
 ]
 
-breed [towers tower]
+
 towers-own [
+
   pioneer
   exit-found
-  memory
+
+  memory ; patch-set
   message-buffer
 ]
 
-
+;
 to load-own-patch-data
   let file user-file
   if ( file != false )
@@ -49,7 +65,7 @@ to load-own-patch-data
       while [j < dimY ]
       [
         ; user-message "i j"
-         set patch-data sentence patch-data (list (list i j get-color item j row ))
+        set patch-data sentence patch-data (list (list i j get-color item j row ))
          set j j + 1
       ]
       set i i - 1
@@ -92,6 +108,7 @@ to setup
   clear-robots
   clear-towers
   clear-drawing
+
   init-patches
   init-robots-at-source
   init-towers
@@ -105,7 +122,7 @@ to init-towers
   ]
   ask towers [
       set shape "flag"
-      set message-buffer (patch-set patch-here)
+      set message-buffer (patch-set)
       set memory (patch-set)
       set exit-found false
       set pioneer nobody
@@ -117,7 +134,6 @@ to init-patches
     set isvisited false
     set visited-by (turtle-set); initializing empty robot set
   ]
-
 end
 
 to clear-all-robots
@@ -136,13 +152,13 @@ to init-robots-at-source
     set communicated (patch-set) ; empty communicated since no communication happened
     set exit-found false
     set num-steps 0
-    set last-updated 0
+    ;set last-updated 0
+
     set visited (patch-set visited patch-here) ; updating visited by adding current patch
-    set exit-found false
     set pioneer nobody
     set battery-drainage 0
   ask patch-here [
-    set parent-patch NoBody
+    set parent-patch nobody
     set isvisited true
     set visited-by (turtle-set visited-by myself) ; myself = robot which called ask patch-here;
   ]
@@ -160,6 +176,7 @@ end
 
 ; collaborative path finding
 to path-finder-collaboration
+  ; communication
   ifelse (ticks mod 11) = 0 ; every ten ticks, communicate
   [
     ifelse communication-type = "Decentralized"
@@ -172,9 +189,10 @@ to path-finder-collaboration
     ]
 
   ]
+  ; Motion planning
   [ ; when not communicating, move
     if any? links [ask links [die]]
-      path-finder-collab-pioneer;
+    path-finder-collab-pioneer;
   ]
 end
 
@@ -186,7 +204,7 @@ to tower-communication
       set num-message-exchanges num-message-exchanges + 1
       set battery-drainage battery-drainage + comm-range * communication-range-battery-drainage-factor
 
-      set last-updated ticks
+      ;set last-updated ticks
       let curr-tower one-of towers in-radius comm-range
       create-link-to curr-tower
       ; send current knowledge base to tower
@@ -209,7 +227,7 @@ end
 
 
 to leader-election-communication-normal
-   ; elect leader -> choose one randomly
+  ; elect leader -> choose one randomly
   let leader one-of robots
 
   ; leader has empty message-buffer
@@ -318,8 +336,12 @@ to send-message-to-leader [curr leader]
   ]
 end
 
+
+
 to path-finder-collab-pioneer
-  ask robots with [finished = false][
+  ask robots with [finished = false]
+  ; pioneer notifiacation
+  [
     ifelse exit-found = true ; if any of the robots found the exit; then follow the pioneer's path
     [
       ; 2nd phase, Following Pioneer's path
@@ -350,6 +372,7 @@ to path-finder-collab-pioneer
     [
       path-finder-collab
     ]
+
     if pcolor = red [
       set finished true
       set exit-found true
@@ -392,6 +415,8 @@ to path-finder-collab
     if pcolor = red and exit-found = false [
       set finished true
       set exit-found true
+
+
     ifelse communication-type = "Decentralized"
     [
       ask robots in-radius comm-range[
@@ -422,6 +447,11 @@ to path-finder-collab
   ]
 
 end
+
+
+
+
+
 
 
 to backtrackFromHere
@@ -468,15 +498,23 @@ to path-finder-basic
     if pcolor = red [set finished true]
   ]
 end
+
+
+
+
+
+
+
+
 @#$#@#$#@
 GRAPHICS-WINDOW
-314
-52
-914
-653
+316
+34
+892
+611
 -1
 -1
-19.73333333333334
+18.933333333333334
 1
 10
 1
@@ -584,7 +622,7 @@ num-robots
 num-robots
 1
 200
-20.0
+12.0
 1
 1
 NIL
@@ -632,7 +670,7 @@ comm-range
 comm-range
 1
 50
-8.0
+7.0
 1
 1
 NIL
@@ -646,7 +684,7 @@ CHOOSER
 communication-type
 communication-type
 "central" "Decentralized"
-1
+0
 
 MONITOR
 1052
@@ -702,6 +740,16 @@ sum [battery-drainage] of robots / num-robots
 1
 11
 
+TEXTBOX
+44
+362
+194
+380
+Search Strategies\n
+12
+0.0
+1
+
 @#$#@#$#@
 ## WHAT IS IT?
 
@@ -731,7 +779,7 @@ This implementation can help in deciding optimal number of robot agents needed t
 
 #### Attributes
 1. Battery - Modelled as Battery Drainage. Depends on steps covered, communication distance, communication technology, communication stratagy (leader vs no leader)
-2. Communication range - same for all robots
+2. Communication range - MAx distance, robots can communicate with each other; same for all robots
 3. Communication technology - same for all robots. This factor inculcates any communication technology and effects battery.
 4. Memory - Infinite memory
 
@@ -782,14 +830,18 @@ The Communication flow is as follows
 **The Motion of robots is same as described in the decentralized approach**
 
 ## Analysis
-![analysis1](file:/home/siddhant/Desktop/Multiagent_Maze_Exploration/Experiments/5.png)
+Followed in the excel sheets
+
 
 ## Assumptions
 1. Infinite memory - Modern Robotics carry enough memory to mask a lidar point cloud of a whole factory
 2. Every Message exchange takes one tick, this can however be varied based on the communication distance
+3. We assumed the ticks are in sync for all the robots, though this is not true in distributed settings but we don't forsee any emergence coming from implementing distributed clocks
 
 ## References
-
+http://car.ensm-douai.fr/CAR2010/Presentations/10-doniec-car2010-slides.pdf
+https://www.researchgate.net/publication/257655885_Multi-Agent_Maze_Exploration
+http://www.swarmrobot.org/Communication.html
 @#$#@#$#@
 default
 true
@@ -1094,7 +1146,9 @@ need-to-manually-make-preview-for-this-model
     <metric>num-message-exchanges / num-robots</metric>
     <metric>sum [battery-drainage] of robots / num-robots</metric>
     <enumeratedValueSet variable="comm-range">
-      <value value="14"/>
+      <value value="5"/>
+      <value value="8"/>
+      <value value="13"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="num-robots">
       <value value="1"/>
@@ -1103,17 +1157,18 @@ need-to-manually-make-preview-for-this-model
       <value value="3"/>
       <value value="4"/>
       <value value="10"/>
+      <value value="2"/>
       <value value="5"/>
       <value value="10"/>
+      <value value="15"/>
       <value value="20"/>
-      <value value="40"/>
+      <value value="30"/>
+      <value value="50"/>
       <value value="80"/>
       <value value="100"/>
-      <value value="150"/>
-      <value value="200"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="communication-type">
-      <value value="&quot;Decentralized&quot;"/>
+      <value value="&quot;central&quot;"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="communication-range-battery-drainage-factor">
       <value value="2"/>
